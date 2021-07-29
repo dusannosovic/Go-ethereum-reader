@@ -8,6 +8,7 @@ import (
 	"log"
 	"math/big"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -48,6 +49,34 @@ func GetBlocks(client ethclient.Client) []Block {
 		blockList = append(blockList, *_block)
 	}
 	return blockList
+}
+func GetBlockByNumber(client ethclient.Client, number int64) *Block {
+	//header, _ := client.HeaderByNumber(context.Background(), nil)
+	//blockNumber := big.NewInt(header.Number.Int64())
+	blockNumber := big.NewInt(number)
+	block, err := client.BlockByNumber(context.Background(), blockNumber)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_block := &Block{
+		BlockNumber:       block.Number().Int64(),
+		Timestamp:         block.Time(),
+		Difficulty:        block.Difficulty().Uint64(),
+		Hash:              block.Hash().String(),
+		TransactionsCount: len(block.Transactions()),
+		Transactions:      []Transaction{},
+	}
+	for _, tx := range block.Transactions() {
+		_block.Transactions = append(_block.Transactions, Transaction{
+			Hash:     tx.Hash().String(),
+			Value:    tx.Value().String(),
+			Gas:      tx.Gas(),
+			GasPrice: tx.GasPrice().Uint64(),
+			Nonce:    tx.Nonce(),
+			//To:       tx.To().String(),
+		})
+	}
+	return _block
 }
 func GetLatestBlock(client ethclient.Client) *Block {
 	header, _ := client.HeaderByNumber(context.Background(), nil)
@@ -188,7 +217,7 @@ func GetAddressBalance(client ethclient.Client, address string) (string, error) 
 }
 
 func getInput(prompt string, r *bufio.Reader) (string, error) {
-	fmt.Println()
+	fmt.Println(prompt)
 	input, err := r.ReadString('\n')
 
 	return strings.TrimSpace(input), err
@@ -197,15 +226,45 @@ func getInput(prompt string, r *bufio.Reader) (string, error) {
 func promptOptions(client ethclient.Client) {
 	reader := bufio.NewReader(os.Stdin)
 
-	opt, _ := getInput("Chose option(1 - Read last block, 2 - Make transfer, 3 - Account Balance)", reader)
+	opt, _ := getInput("Chose option(1 - Read last block, 2 - Make transfer, 3 - Account Balance, 4 Read block by number)", reader)
 
 	switch opt {
 	case "1":
-
+		printLatestBlock(*GetLatestBlock(client))
+		promptOptions(client)
 	case "2":
-
+		fmt.Println("Transaction Hash:")
+		privKey, _ := getInput("Insert private key: ", reader)
+		toAddress, _ := getInput("Insert hex address To", reader)
+		amount, _ := getInput("Insert amount", reader)
+		a, err := strconv.ParseInt(amount, 10, 64)
+		if err != nil {
+			fmt.Println("The price must be a number")
+			promptOptions(client)
+		}
+		fmt.Println(Transfer(client, privKey, toAddress, a))
 	case "3":
-
+		acccountAddress, _ := getInput("Insert hex account address", reader)
+		ammount, err := GetAddressBalance(client, acccountAddress)
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Print("Account ammount:  ", ammount, "\n")
+		promptOptions(client)
+	case "4":
+		header, _ := client.HeaderByNumber(context.Background(), nil)
+		blockNumber := header.Number.Int64()
+		fmt.Println("Choose one number between 0 and ", blockNumber)
+		number, err := getInput("", reader)
+		if err != nil {
+			fmt.Println(err)
+		}
+		num, err := strconv.ParseInt(number, 10, 64)
+		if err != nil {
+			fmt.Println("Number must be a number")
+		}
+		printLatestBlock(*GetBlockByNumber(client, num))
+		promptOptions(client)
 	default:
 
 	}
@@ -218,10 +277,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	promptOptions(*client)
 	//blocks := GetBlocks(*client)
 	//block := GetLatestBlock(*client)
 	//printLatestBlock(*block)
-	fmt.Println(GetAddressBalance(*client, "0xE13EF9474558F84DC23D0fd4736b772aAdd0FD51"))
+	//fmt.Println(GetAddressBalance(*client, "0xE13EF9474558F84DC23D0fd4736b772aAdd0FD51"))
 	//fmt.Println(Transfer(*client, "390ad60842a88911f019ad20782b32f07620107e2d07d0dc2b90cada46398829", "0xE13EF9474558F84DC23D0fd4736b772aAdd0FD51", 2322321312))
 
 }
